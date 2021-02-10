@@ -193,7 +193,9 @@ app.post("/api/login", function (req, res) {
 
             res.status(200).json({ "token": token,"ApartmentName": doc.ApartmentName});
         } else {
-            manageError(res, "invalid Credentials", "invalid Credentials");
+            // manageError(res, "invalid Credentials", "invalid Credentials");
+            res.status(200).json({ code: "ERROR",message:"invalid Credentials"});
+
             
         }
     });
