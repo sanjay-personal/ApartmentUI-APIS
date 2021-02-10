@@ -17,6 +17,9 @@ var app = express();
 var cors = require('cors')
 var moment = require('moment')
 
+var md5 = require('md5');
+var jwt = require('jsonwebtoken');
+
 
 // Define the JSON parser as a default way 
 // to consume and produce data through the 
@@ -73,11 +76,12 @@ app.get("/api/status", function (req, res) {
  *  GET: finds all apartments
  */
 app.get("/api/apartments", function (req, res) {
+    ensureToken(req,res);
     database.collection(APARTMENTS_COLLECTION).find({}).toArray(function (error, data) {
         if (error) {
             manageError(res, err.message, "Failed to get contacts.");
         } else {
-            res.status(200).json({"primary":data});
+            res.status(200).json({ "primary": data });
         }
     });
 });
@@ -88,13 +92,13 @@ app.get("/api/apartments", function (req, res) {
 app.post("/api/apartments", function (req, res) {
     var apartment = req.body;
     //     manageError(res, "Invalid apartment input", "Name is mandatory.", 400);
-        database.collection(APARTMENTS_COLLECTION).insertOne(apartment, function (err, doc) {
-            if (err) {
-                manageError(res, err.message, "Failed to create new apartment.");
-            } else {
-                res.status(200).json({status:{code: "SUCCESS",message: "Apartment Created Successfully"}});
-            }
-        });
+    database.collection(APARTMENTS_COLLECTION).insertOne(apartment, function (err, doc) {
+        if (err) {
+            manageError(res, err.message, "Failed to create new apartment.");
+        } else {
+            res.status(200).json({ status: { code: "SUCCESS", message: "Apartment Created Successfully" } });
+        }
+    });
     // }
 });
 
@@ -103,19 +107,19 @@ app.post("/api/apartments", function (req, res) {
  */
 app.put("/api/apartments", function (req, res) {
     var apartment = req.body;
-    var apartmentId = {"ApartmentId":req.body['ApartmentId']};
-    var updateApartment = { $set: apartment};
+    var apartmentId = { "ApartmentId": req.body['ApartmentId'] };
+    var updateApartment = { $set: apartment };
 
-    console.log("apartmentId",apartmentId)
+    console.log("apartmentId", apartmentId)
 
     //     manageError(res, "Invalid apartment input", "Name is mandatory.", 400);
-        database.collection(APARTMENTS_COLLECTION).updateOne(apartmentId,updateApartment, function (err, doc) {
-            if (err) {
-                manageError(res, err.message, "Failed to create new apartment.");
-            } else {
-                res.status(200).json({status:{code: "SUCCESS",message: "Apartment Updated Successfully"}});
-            }
-        });
+    database.collection(APARTMENTS_COLLECTION).updateOne(apartmentId, updateApartment, function (err, doc) {
+        if (err) {
+            manageError(res, err.message, "Failed to create new apartment.");
+        } else {
+            res.status(200).json({ status: { code: "SUCCESS", message: "Apartment Updated Successfully" } });
+        }
+    });
     // }
 });
 
@@ -140,4 +144,81 @@ app.delete("/api/apartments/:id", function (req, res) {
 function manageError(res, reason, message, code) {
     console.log("Error: " + reason);
     res.status(code || 500).json({ "error": message });
+}
+
+
+app.get("/api/apartments/:id", function (req, res) {
+    console.log("req.params.id", req.params.id)
+    database.collection(APARTMENTS_COLLECTION).findOne({ "ApartmentId": req.params.id }, function (err, doc) {
+        if (err) {
+            manageError(res, err.message, "Failed to create new apartment.");
+        } else {
+            res.status(200).json({ primary: doc, status: { code: "SUCCESS", message: "Apartment Created Successfully" } });
+        }
+    });
+});
+
+
+app.post("/api/signup", function (req, res) {
+    console.log("signup1",signup)
+
+    var signup = req.body;
+    let ApartmentId = 'APSGMVDS' + Math.floor((Math.random() * 99999) + 1);
+    signup['Password'] = md5(signup['Password']);
+    signup['ConfirmPassword'] = md5(signup['ConfirmPassword']);
+    signup['ApartmentId'] = ApartmentId;
+    console.log("signup2",signup)
+    if (signup['Password'] === signup['ConfirmPassword']) {
+        database.collection("sign_up").insertOne(signup, function (err, doc) {
+            if (err) {
+                manageError(res, err.message, "Failed to create new apartment.");
+            } else {
+                res.status(200).json({ status: { code: "SUCCESS", message: "Signup Created Successfully" } });
+            }
+        });
+    } else {
+        manageError(res, "Password and ConfirmPassword are not matching", "Password and ConfirmPassword are not matching", 400);
+
+    }
+
+});
+
+
+app.post("/api/login", function (req, res) {
+    var login = req.body;
+//   here login.ApartmentName is apartmentid
+    database.collection("sign_up").findOne({ "ApartmentId": login.ApartmentName, "Password": md5(login.Password) }, function (err, doc) {
+        if (doc !== null) {
+            const token = jwt.sign({ login }, 'my_sceret_key');
+
+            res.status(200).json({ "token": token,"ApartmentName": doc.ApartmentName});
+        } else {
+            manageError(res, "invalid Credentials", "invalid Credentials");
+            
+        }
+    });
+});
+
+app.get("/api/signup", function (req, res) {
+    // ensureToken(req,res);
+    database.collection("sign_up").find({},{ projection: { _id: 0, ApartmentName: 1, ApartmentId: 1 } }).toArray(function (error, data) {
+        if (error) {
+            manageError(res, err.message, "Failed to get contacts.");
+        } else {
+            res.status(200).json({ "primary": data });
+        }
+    });
+});
+
+
+  function ensureToken(req, res) {
+    const bearerHeader = req.headers['authorization'];
+    if (typeof bearerHeader !== 'undefined') {
+        const bearer = bearerHeader.split(' ');
+        const bearerToken = bearer[1];
+        req.token = bearerToken;
+        return req.token
+    } else {
+        res.sendStatus(403)
+    }
 }
