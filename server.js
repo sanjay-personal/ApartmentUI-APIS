@@ -76,7 +76,7 @@ app.get("/api/status", function (req, res) {
  *  GET: finds all apartments
  */
 app.get("/api/apartments", function (req, res) {
-    ensureToken(req,res);
+    ensureToken(req, res);
     database.collection(APARTMENTS_COLLECTION).find({}).toArray(function (error, data) {
         if (error) {
             manageError(res, err.message, "Failed to get contacts.");
@@ -89,16 +89,26 @@ app.get("/api/apartments", function (req, res) {
 /*  "/api/apartments"
  *   POST: creates a new apartment
  */
-app.post("/api/apartments", function (req, res) {
+app.post("/api/apartments", async function (req, res) {
     var apartment = req.body;
+    apartment['CreatedBy'] = new Date();
+    apartment['UpdatedBy'] = new Date();
+    apartment['Active'] = "1";
+   let flat = await onFlatQuery(apartment['BlockNumber'],apartment['FloorNumber'],apartment['FlatNumber']);
+   console.log("flat",flat)
+    if(flat === undefined) {
     //     manageError(res, "Invalid apartment input", "Name is mandatory.", 400);
     database.collection(APARTMENTS_COLLECTION).insertOne(apartment, function (err, doc) {
         if (err) {
-            manageError(res, err.message, "Failed to create new apartment.");
+            manageError(res, err.message, "Failed to create new Flat.");
         } else {
-            res.status(200).json({ status: { code: "SUCCESS", message: "Apartment Created Successfully" } });
+            res.status(200).json({ status: { code: "SUCCESS", message: "New Flat Created Successfully" } });
         }
     });
+} else {
+    res.status(200).json({ status: { code: "ERROR", message: "Flat is Already Assigned" } });
+
+}
     // }
 });
 
@@ -107,6 +117,8 @@ app.post("/api/apartments", function (req, res) {
  */
 app.put("/api/apartments", function (req, res) {
     var apartment = req.body;
+    apartment['UpdatedBy'] = new Date();
+
     var apartmentId = { "ApartmentId": req.body['ApartmentId'] };
     var updateApartment = { $set: apartment };
 
@@ -159,15 +171,25 @@ app.get("/api/apartments/:id", function (req, res) {
 });
 
 
-app.post("/api/signup", function (req, res) {
-    console.log("signup1",signup)
-
+app.post("/api/signup", async function (req, res) {
     var signup = req.body;
-    let ApartmentId = 'APSGMVDS' + Math.floor((Math.random() * 99999) + 1);
+    var lastindex
+    var i = 0
+    var lastindexValue
+    var lastindex = await onLoadSignup();
+    if (lastindex.length === 0) {
+        signup['ApartmentId'] = 'APSGMVDS0';
+    } else {
+        lastindexValue = parseInt(lastindex[lastindex.length - 1]['ApartmentId'].replace("APSGMVDS", ""));
+        i = ++lastindexValue;
+    }
+
+    let ApartmentId = 'APSGMVDS' + i;
     signup['Password'] = md5(signup['Password']);
     signup['ConfirmPassword'] = md5(signup['ConfirmPassword']);
     signup['ApartmentId'] = ApartmentId;
-    console.log("signup2",signup)
+    signup['CreatedBy'] = new Date();
+    signup['UpdatedBy'] = new Date();
     if (signup['Password'] === signup['ConfirmPassword']) {
         database.collection("sign_up").insertOne(signup, function (err, doc) {
             if (err) {
@@ -186,24 +208,22 @@ app.post("/api/signup", function (req, res) {
 
 app.post("/api/login", function (req, res) {
     var login = req.body;
-//   here login.ApartmentName is apartmentid
+    //   here login.ApartmentName is apartmentid
     database.collection("sign_up").findOne({ "ApartmentId": login.ApartmentName, "Password": md5(login.Password) }, function (err, doc) {
         if (doc !== null) {
             const token = jwt.sign({ login }, 'my_sceret_key');
-
-            res.status(200).json({ "token": token,"ApartmentName": doc.ApartmentName});
+            res.status(200).json({ "token": token, "ApartmentName": doc.ApartmentName,"ApartmentId": doc.ApartmentId });
         } else {
             // manageError(res, "invalid Credentials", "invalid Credentials");
-            res.status(200).json({ code: "ERROR",message:"invalid Credentials"});
+            res.status(200).json({ code: "ERROR", message: "invalid Credentials" });
 
-            
+
         }
     });
 });
 
 app.get("/api/signup", function (req, res) {
-    // ensureToken(req,res);
-    database.collection("sign_up").find({},{ projection: { _id: 0, ApartmentName: 1, ApartmentId: 1 } }).toArray(function (error, data) {
+    database.collection("sign_up").find({}, { projection: { _id: 0, ApartmentName: 1, ApartmentId: 1 } }).toArray(function (error, data) {
         if (error) {
             manageError(res, err.message, "Failed to get contacts.");
         } else {
@@ -213,7 +233,7 @@ app.get("/api/signup", function (req, res) {
 });
 
 
-  function ensureToken(req, res) {
+function ensureToken(req, res) {
     const bearerHeader = req.headers['authorization'];
     if (typeof bearerHeader !== 'undefined') {
         const bearer = bearerHeader.split(' ');
@@ -223,4 +243,26 @@ app.get("/api/signup", function (req, res) {
     } else {
         res.sendStatus(403)
     }
+}
+
+function onLoadSignup() {
+    return new Promise((resolve, reject) => {
+        database.collection("sign_up").find({}).toArray().then(res => {
+            resolve(res)
+        }, (error) => {
+            return reject(error);
+        });
+    });
+}
+
+
+function onFlatQuery(blockNumber,floorNumber,FlatNumber) {
+    console.log("blockNumber=",blockNumber,"floorNumber=",floorNumber,"FlatNumber=",FlatNumber)
+    return new Promise((resolve, reject) => {
+        database.collection(APARTMENTS_COLLECTION).findOne({"BlockNumber":blockNumber,"FloorNumber":floorNumber,"FlatNumber":FlatNumber}).then(res => {
+            resolve(res)
+        }, (error) => {
+            return reject(error);
+        });
+    });
 }
