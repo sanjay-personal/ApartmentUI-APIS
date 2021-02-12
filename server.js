@@ -91,12 +91,28 @@ app.get("/api/apartments", function (req, res) {
  */
 app.post("/api/apartments", async function (req, res) {
     var apartment = req.body;
+
+
+    var lastindex
+    var i = 0
+    var lastindexValue
+    var lastindex = await onApartmentsQuery();
+    if (lastindex.length === 0) {
+        apartment['FlatId'] = 'APSGMVDSBRF0';
+    } else {
+        lastindexValue = parseInt(lastindex[lastindex.length - 1]['FlatId'].replace("APSGMVDSBRF", ""));
+        i = ++lastindexValue;
+    }
+
+    let FlatId = 'APSGMVDSBRF' + i;
     apartment['CreatedBy'] = new Date();
     apartment['UpdatedBy'] = new Date();
+    apartment['FlatId'] = FlatId;
+
     apartment['Active'] = "1";
    let flat = await onFlatQuery(apartment['BlockNumber'],apartment['FloorNumber'],apartment['FlatNumber']);
    console.log("flat",flat)
-    if(flat === undefined) {
+    if( flat === null) {
     //     manageError(res, "Invalid apartment input", "Name is mandatory.", 400);
     database.collection(APARTMENTS_COLLECTION).insertOne(apartment, function (err, doc) {
         if (err) {
@@ -118,18 +134,21 @@ app.post("/api/apartments", async function (req, res) {
 app.put("/api/apartments", function (req, res) {
     var apartment = req.body;
     apartment['UpdatedBy'] = new Date();
+    apartment['Active'] = "1";
 
-    var apartmentId = { "ApartmentId": req.body['ApartmentId'] };
+    var flatId = { "FlatId": req.body['FlatId'] };
     var updateApartment = { $set: apartment };
 
-    console.log("apartmentId", apartmentId)
+    console.log("flatId", flatId)
+
+    
 
     //     manageError(res, "Invalid apartment input", "Name is mandatory.", 400);
-    database.collection(APARTMENTS_COLLECTION).updateOne(apartmentId, updateApartment, function (err, doc) {
+    database.collection(APARTMENTS_COLLECTION).updateOne(flatId, updateApartment, function (err, doc) {
         if (err) {
-            manageError(res, err.message, "Failed to create new apartment.");
+            manageError(res, err.message, "Failed to updated new Flat.");
         } else {
-            res.status(200).json({ status: { code: "SUCCESS", message: "Apartment Updated Successfully" } });
+            res.status(200).json({ status: { code: "SUCCESS", message: "Flat Updated Successfully" } });
         }
     });
     // }
@@ -161,7 +180,7 @@ function manageError(res, reason, message, code) {
 
 app.get("/api/apartments/:id", function (req, res) {
     console.log("req.params.id", req.params.id)
-    database.collection(APARTMENTS_COLLECTION).findOne({ "ApartmentId": req.params.id }, function (err, doc) {
+    database.collection(APARTMENTS_COLLECTION).findOne({ "FlatId": req.params.id }, function (err, doc) {
         if (err) {
             manageError(res, err.message, "Failed to create new apartment.");
         } else {
@@ -176,7 +195,7 @@ app.post("/api/signup", async function (req, res) {
     var lastindex
     var i = 0
     var lastindexValue
-    var lastindex = await onLoadSignup();
+    var lastindex = await onLoadSignupQuery();
     if (lastindex.length === 0) {
         signup['ApartmentId'] = 'APSGMVDS0';
     } else {
@@ -245,7 +264,7 @@ function ensureToken(req, res) {
     }
 }
 
-function onLoadSignup() {
+function onLoadSignupQuery() {
     return new Promise((resolve, reject) => {
         database.collection("sign_up").find({}).toArray().then(res => {
             resolve(res)
@@ -260,6 +279,17 @@ function onFlatQuery(blockNumber,floorNumber,FlatNumber) {
     console.log("blockNumber=",blockNumber,"floorNumber=",floorNumber,"FlatNumber=",FlatNumber)
     return new Promise((resolve, reject) => {
         database.collection(APARTMENTS_COLLECTION).findOne({"BlockNumber":blockNumber,"FloorNumber":floorNumber,"FlatNumber":FlatNumber}).then(res => {
+            resolve(res)
+        }, (error) => {
+            return reject(error);
+        });
+    });
+}
+
+
+function onApartmentsQuery() {
+    return new Promise((resolve, reject) => {
+        database.collection(APARTMENTS_COLLECTION).find({}).toArray().then(res => {
             resolve(res)
         }, (error) => {
             return reject(error);
