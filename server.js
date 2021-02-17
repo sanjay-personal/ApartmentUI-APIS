@@ -234,7 +234,7 @@ app.post("/api/login", function (req, res) {
     database.collection("sign_up").findOne({ "ApartmentId": login.ApartmentName, "Password": md5(login.Password) }, function (err, doc) {
         if (doc !== null) {
             const token = jwt.sign({ login }, 'my_sceret_key');
-            res.status(200).json({ "token": token, "ApartmentName": doc.ApartmentName,"ApartmentId": doc.ApartmentId });
+            res.status(200).json({ "token": token, "ApartmentName": doc.ApartmentName,"ApartmentId": doc.ApartmentId,"MaintenanceAmount": doc.MaintenanceAmount });
         } else {
             // manageError(res, "invalid Credentials", "invalid Credentials");
             res.status(200).json({ code: "ERROR", message: "invalid Credentials" });
@@ -295,6 +295,48 @@ app.get("/api/flats",async function (req, res) {
                 let flatList = await onApartmentIdByFlatsQuery(loggedUser['login']['ApartmentName'])
 
                 res.status(200).json({ primary: flatList, status: { code: 'SUCCESS', message: "Success" } });
+            }
+        });
+});
+
+
+//post maintenance
+
+app.post("/api/maintenance",async function (req, res) {
+
+    jwt.verify(ensureToken(req, res), 'my_sceret_key', async (err, loggedUser) => {
+            var body = req.body;
+            body['CreatedDate'] = new Date();
+            body['UpdatedDate'] = new Date();
+            body['Month'] = getFormattedDate(body['MaintenanceDate'],'MMMM');
+            body['Year'] = getFormattedDate(body['MaintenanceDate'],'YYYY')
+            if (err) {
+                res.sendStatus(403);
+            } else {
+
+                let maintenanceCheck = await onFlatNumberByMaintenanceDateQuery(body['FlatNumber'],body['Month'],body['Year']);
+                console.log("maintenanceCheck",maintenanceCheck)
+                if(maintenanceCheck === null) {
+                let maintenance = await onApartmentsByMaintenancePostQuery(body);
+                res.status(200).json({ primary: maintenance, status: { code: 'SUCCESS', message: "Your Maintenance Amount is Successfully Created" } });
+                } else {
+                res.status(200).json({ status: { code: 'ERROR', message: "Already You Paid Maintenance on this Date " + maintenanceCheck['MaintenanceDate'] } });
+
+                }
+            }
+        });
+});
+// list maintenance
+app.get("/api/maintenance",async function (req, res) {
+
+    jwt.verify(ensureToken(req, res), 'my_sceret_key', async (err, loggedUser) => {
+            console.log("loggedUser",loggedUser['login']['ApartmentName'])
+            if (err) {
+                res.sendStatus(403);
+            } else {
+                let maintenanceList = await onApartmentsByMaintenanceQuery(loggedUser['login']['ApartmentName'])
+
+                res.status(200).json({ primary: maintenanceList, status: { code: 'SUCCESS', message: "Success" } });
             }
         });
 });
@@ -379,4 +421,56 @@ function onApartmentIdByFlatsQuery(apartmentId) {
             return reject(error);
         });
     });
+}
+
+function onApartmentsByMaintenancePostQuery(body) {
+    return new Promise((resolve,reject)=>{
+        database.collection("maintenance_master").insertOne(body).then(res => {
+            resolve(res)
+        }, (error) => {
+            return reject(error);
+        });
+    })
+}
+
+function onFlatNumberByMaintenanceDateQuery(FlatNumber,Month,Year) {
+    console.log("FlatNumber=",FlatNumber,"Month", Month, "Year","Year")
+    return new Promise((resolve, reject) => {
+        database.collection("maintenance_master").findOne({"Month":Month,"FlatNumber":FlatNumber,"Year":Year}).then(res => {
+            resolve(res)
+        }, (error) => {
+            return reject(error);
+        });
+    });
+}
+
+
+function onApartmentsByMaintenanceQuery(apartmentId) {
+    return new Promise((resolve, reject) => { 
+        database.collection("maintenance_master").find({"ApartmentId":apartmentId}).sort({ "FlatNumber": 1}).toArray().then(res => {
+            resolve(res)
+        }, (error) => {
+            return reject(error);
+        });
+    });
+}
+
+
+// date formate 
+
+
+ function getFormattedDate(date, format)  {
+    return moment(date).format(format);
+}
+
+function getDefaultFormattedDate(date) {
+    return this.getFormattedDate(date, 'YYYY-MM-DD');
+}
+
+function getDefaultLongFormattedDate(date) {
+    return this.getFormattedDate(date, 'YYYY-MM-DD HH:mm:ss');
+}
+
+ function getLocalDateFromDefaultFormat(dateStr) {
+    return this.getLocalDateFromString(dateStr, 'YYYY-MM-DD');
 }
