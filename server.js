@@ -108,8 +108,8 @@ app.post("/api/apartments", async function (req, res) {
     }
 
     let FlatId = 'APSGMVDSBRF' + i;
-    apartment['Created'] = new Date();
-    apartment['Updated'] = new Date();
+    apartment['Created Date'] = new Date();
+    apartment['Updated Date'] = new Date();
     apartment['FlatId'] = FlatId;
 
     apartment['Active'] = "1";
@@ -136,7 +136,7 @@ app.post("/api/apartments", async function (req, res) {
  */
 app.put("/api/apartments", function (req, res) {
     var apartment = req.body;
-    apartment['Updated'] = new Date();
+    apartment['Updated Date'] = new Date();
     apartment['Active'] = "1";
 
     var flatId = { "FlatId": req.body['FlatId'] };
@@ -210,8 +210,8 @@ app.post("/api/signup", async function (req, res) {
     signup['Password'] = md5(signup['Password']);
     signup['ConfirmPassword'] = md5(signup['ConfirmPassword']);
     signup['ApartmentId'] = ApartmentId;
-    signup['Created'] = new Date();
-    signup['Updated'] = new Date();
+    signup['Created Date'] = new Date();
+    signup['Updated Date'] = new Date();
     if (signup['Password'] === signup['ConfirmPassword']) {
         database.collection("sign_up").insertOne(signup, function (err, doc) {
             if (err) {
@@ -283,6 +283,22 @@ app.post("/api/apartmentStatus",async function (req, res) {
         });
 });
 
+// FLATS DROPDOWN
+
+app.get("/api/flats",async function (req, res) {
+
+    jwt.verify(ensureToken(req, res), 'my_sceret_key', async (err, loggedUser) => {
+            console.log("loggedUser",loggedUser['login']['ApartmentName'])
+            if (err) {
+                res.sendStatus(403);
+            } else {
+                let flatList = await onApartmentIdByFlatsQuery(loggedUser['login']['ApartmentName'])
+
+                res.status(200).json({ primary: flatList, status: { code: 'SUCCESS', message: "Success" } });
+            }
+        });
+});
+
 
 // =============================REPO====================================
 
@@ -347,6 +363,17 @@ function onApartmentsByApartmentIdQuery(apartmentId) {
 function onApartmentsByFlatIdStatusQuery(FlatId,status) {
     return new Promise((resolve, reject) => {
         database.collection(APARTMENTS_COLLECTION).updateOne({"FlatId" : FlatId }, { $set: { "Active" : status} }).then(res => {
+            resolve(res)
+        }, (error) => {
+            return reject(error);
+        });
+    });
+}
+
+function onApartmentIdByFlatsQuery(apartmentId) {
+    return new Promise((resolve, reject) => {
+        // in mongodb query db.getCollection('apartments_master').find({ApartmentId:"APSGMVDS2"}, { FlatNumber: 1, FlatId: 1 })
+        database.collection(APARTMENTS_COLLECTION).find({"ApartmentId":apartmentId},{ projection: { FlatNumber: 1, FlatId: 1 } }).toArray().then(res => {
             resolve(res)
         }, (error) => {
             return reject(error);
