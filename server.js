@@ -386,7 +386,7 @@ function onLoadSignupQuery() {
 
 
 function onFlatQuery(blockNumber,floorNumber,FlatNumber) {
-    console.log("blockNumber=",blockNumber,"floorNumber=",floorNumber,"FlatNumber=",FlatNumber)
+    // console.log("blockNumber=",blockNumber,"floorNumber=",floorNumber,"FlatNumber=",FlatNumber)
     return new Promise((resolve, reject) => {
         database.collection(APARTMENTS_COLLECTION).findOne({"BlockNumber":blockNumber,"FloorNumber":floorNumber,"FlatNumber":FlatNumber}).then(res => {
             resolve(res)
@@ -432,7 +432,7 @@ function onApartmentsByFlatIdStatusQuery(FlatId,status) {
 function onApartmentIdByFlatsQuery(apartmentId) {
     return new Promise((resolve, reject) => {
         // in mongodb query db.getCollection('apartments_master').find({ApartmentId:"APSGMVDS2"}, { FlatNumber: 1, FlatId: 1 })
-        database.collection(APARTMENTS_COLLECTION).find({"ApartmentId":apartmentId},{ projection: { FlatNumber: 1, FlatId: 1 } }).toArray().then(res => {
+        database.collection(APARTMENTS_COLLECTION).find({"ApartmentId":apartmentId,"Active":"1"},{ projection: { FlatNumber: 1, FlatId: 1 } }).toArray().then(res => {
             resolve(res)
         }, (error) => {
             return reject(error);
@@ -451,7 +451,7 @@ function onApartmentsByMaintenancePostQuery(body) {
 }
 
 function onFlatNumberByMaintenanceDateQuery(FlatNumber,Month,Year) {
-    console.log("FlatNumber=",FlatNumber,"Month", Month, "Year","Year")
+    // console.log("FlatNumber=",FlatNumber,"Month", Month, "Year","Year")
     return new Promise((resolve, reject) => {
         database.collection("maintenance_master").findOne({"Month":Month,"FlatNumber":FlatNumber,"Year":Year}).then(res => {
             resolve(res)
