@@ -288,7 +288,7 @@ app.post("/api/apartmentStatus",async function (req, res) {
 app.get("/api/flats",async function (req, res) {
 
     jwt.verify(ensureToken(req, res), 'my_sceret_key', async (err, loggedUser) => {
-            console.log("loggedUser",loggedUser['login']['ApartmentName'])
+            // console.log("loggedUser",loggedUser['login']['ApartmentName'])
             if (err) {
                 res.sendStatus(403);
             } else {
@@ -330,13 +330,30 @@ app.post("/api/maintenance",async function (req, res) {
 app.get("/api/maintenance",async function (req, res) {
 
     jwt.verify(ensureToken(req, res), 'my_sceret_key', async (err, loggedUser) => {
-            console.log("loggedUser",loggedUser['login']['ApartmentName'])
+            // console.log("loggedUser",loggedUser['login']['ApartmentName'])
             if (err) {
                 res.sendStatus(403);
             } else {
                 let maintenanceList = await onApartmentsByMaintenanceQuery(loggedUser['login']['ApartmentName'])
 
                 res.status(200).json({ primary: maintenanceList, status: { code: 'SUCCESS', message: "Success" } });
+            }
+        });
+});
+
+// monthwise list
+
+
+app.get("/api/maintenance/:id",async function (req, res) {
+    // req.params.id
+    jwt.verify(ensureToken(req, res), 'my_sceret_key', async (err, loggedUser) => {
+            // console.log("loggedUser",loggedUser['login']['ApartmentName'])
+            if (err) {
+                res.sendStatus(403);
+            } else {
+                let maintenanceListMonthWise = await onApartmentsByMonthWiseMaintenanceQuery(loggedUser['login']['ApartmentName'],req.params.id)
+
+                res.status(200).json({ primary: maintenanceListMonthWise, status: { code: 'SUCCESS', message: "Success" } });
             }
         });
 });
@@ -448,6 +465,16 @@ function onFlatNumberByMaintenanceDateQuery(FlatNumber,Month,Year) {
 function onApartmentsByMaintenanceQuery(apartmentId) {
     return new Promise((resolve, reject) => { 
         database.collection("maintenance_master").find({"ApartmentId":apartmentId}).sort({ "FlatNumber": 1}).toArray().then(res => {
+            resolve(res)
+        }, (error) => {
+            return reject(error);
+        });
+    });
+}
+
+function onApartmentsByMonthWiseMaintenanceQuery(apartmentId,month) {
+    return new Promise((resolve, reject) => { 
+        database.collection("maintenance_master").find({"ApartmentId":apartmentId,"Month":month}).sort({ "FlatNumber": 1}).toArray().then(res => {
             resolve(res)
         }, (error) => {
             return reject(error);
