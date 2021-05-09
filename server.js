@@ -20,6 +20,8 @@ var moment = require('moment')
 var md5 = require('md5');
 var jwt = require('jsonwebtoken');
 
+var nodemailer = require('nodemailer');
+
 
 // Define the JSON parser as a default way 
 // to consume and produce data through the 
@@ -75,18 +77,18 @@ app.get("/api/status", function (req, res) {
 /*  "/api/apartments"
  *  GET: finds all apartments
  */
-app.get("/api/apartments",async function (req, res) {
+app.get("/api/apartments", async function (req, res) {
 
     jwt.verify(ensureToken(req, res), 'my_sceret_key', async (err, loggedUser) => {
-            console.log("loggedUser",loggedUser['login']['ApartmentName'])
-            if (err) {
-                res.sendStatus(403);
-            } else {
-                let ApartmentList = await onApartmentsByApartmentIdQuery(loggedUser['login']['ApartmentName'])
+        console.log("loggedUser", loggedUser['login']['ApartmentId'])
+        if (err) {
+            res.sendStatus(403);
+        } else {
+            let ApartmentList = await onApartmentsByApartmentIdQuery(loggedUser['login']['ApartmentId'])
 
-                res.status(200).json({ primary: ApartmentList, status: { code: 'SUCCESS', message: "Success" } });
-            }
-        });
+            res.status(200).json({ primary: ApartmentList, status: { code: 'SUCCESS', message: "Success" } });
+        }
+    });
 });
 
 /*  "/api/apartments"
@@ -113,21 +115,21 @@ app.post("/api/apartments", async function (req, res) {
     apartment['FlatId'] = FlatId;
 
     apartment['Active'] = "1";
-   let flat = await onFlatQuery(apartment['BlockNumber'],apartment['FloorNumber'],apartment['FlatNumber']);
-   console.log("flat",flat)
-    if( flat === null) {
-    //     manageError(res, "Invalid apartment input", "Name is mandatory.", 400);
-    database.collection(APARTMENTS_COLLECTION).insertOne(apartment, function (err, doc) {
-        if (err) {
-            manageError(res, err.message, "Failed to create new Flat.");
-        } else {
-            res.status(200).json({ status: { code: "SUCCESS", message: "New Flat Created Successfully" } });
-        }
-    });
-} else {
-    res.status(200).json({ status: { code: "ERROR", message: "Flat is Already Assigned" } });
+    let flat = await onFlatQuery(apartment['BlockNumber'], apartment['FloorNumber'], apartment['FlatNumber']);
+    console.log("flat", flat)
+    if (flat === null) {
+        //     manageError(res, "Invalid apartment input", "Name is mandatory.", 400);
+        database.collection(APARTMENTS_COLLECTION).insertOne(apartment, function (err, doc) {
+            if (err) {
+                manageError(res, err.message, "Failed to create new Flat.");
+            } else {
+                res.status(200).json({ status: { code: "SUCCESS", message: "New Flat Created Successfully" } });
+            }
+        });
+    } else {
+        res.status(200).json({ status: { code: "ERROR", message: "Flat is Already Assigned" } });
 
-}
+    }
     // }
 });
 
@@ -144,7 +146,7 @@ app.put("/api/apartments", function (req, res) {
 
     console.log("flatId", flatId)
 
-    
+
 
     //     manageError(res, "Invalid apartment input", "Name is mandatory.", 400);
     database.collection(APARTMENTS_COLLECTION).updateOne(flatId, updateApartment, function (err, doc) {
@@ -218,6 +220,8 @@ app.post("/api/signup", async function (req, res) {
                 manageError(res, err.message, "Failed to create new apartment.");
             } else {
                 res.status(200).json({ status: { code: "SUCCESS", message: "Signup Created Successfully" } });
+                sendGMail(signup)
+
             }
         });
     } else {
@@ -231,10 +235,10 @@ app.post("/api/signup", async function (req, res) {
 app.post("/api/login", function (req, res) {
     var login = req.body;
     //   here login.ApartmentName is apartmentid
-    database.collection("sign_up").findOne({ "ApartmentId": login.ApartmentName, "Password": md5(login.Password) }, function (err, doc) {
+    database.collection("sign_up").findOne({ "ApartmentId": login.ApartmentId, "Password": md5(login.Password) }, function (err, doc) {
         if (doc !== null) {
             const token = jwt.sign({ login }, 'my_sceret_key');
-            res.status(200).json({ "token": token, "ApartmentName": doc.ApartmentName,"ApartmentId": doc.ApartmentId,"MaintenanceAmount": doc.MaintenanceAmount });
+            res.status(200).json({ "token": token, "ApartmentName": doc.ApartmentName, "ApartmentId": doc.ApartmentId, "MaintenanceAmount": doc.MaintenanceAmount });
         } else {
             // manageError(res, "invalid Credentials", "invalid Credentials");
             res.status(200).json({ code: "ERROR", message: "invalid Credentials" });
@@ -255,108 +259,172 @@ app.get("/api/signup", function (req, res) {
 });
 
 
-app.post("/api/apartmentStatus",async function (req, res) {
+app.post("/api/apartmentStatus", async function (req, res) {
 
     jwt.verify(ensureToken(req, res), 'my_sceret_key', async (err, loggedUser) => {
-            var body = req.body;
-            var status
-            var messageStatus
-            if (err) {
-                res.sendStatus(403);
+        var body = req.body;
+        var status
+        var messageStatus
+        if (err) {
+            res.sendStatus(403);
+        } else {
+            console.log("body['Active']", body['Active'], body['FlatId'], body)
+            if (body['Active'] === "1") {
+                status = "0"
+                messageStatus = "Successfully InActivated the Flat"
+            } else if (body['Active'] === "0") {
+                status = "1"
+                messageStatus = "Successfully Activated the Flat"
             } else {
-                console.log("body['Active']",body['Active'],body['FlatId'],body)
-                if(body['Active'] === "1") {
-                    status = "0"
-                    messageStatus = "Successfully InActivated the Flat"
-                } else if(body['Active'] === "0") {
-                    status = "1"
-                    messageStatus = "Successfully Activated the Flat"
-                } else {
-                    status = body['Active']
-                    messageStatus = "Wrong Status"
+                status = body['Active']
+                messageStatus = "Wrong Status"
 
-                }
-                let flatList = await onApartmentsByFlatIdStatusQuery(body['FlatId'],status)
-               
-                res.status(200).json({ primary: flatList, status: { code: 'SUCCESS', message: messageStatus } });
             }
-        });
+            let flatList = await onApartmentsByFlatIdStatusQuery(body['FlatId'], status)
+
+            res.status(200).json({ primary: flatList, status: { code: 'SUCCESS', message: messageStatus } });
+        }
+    });
 });
 
 // FLATS DROPDOWN
 
-app.get("/api/flats",async function (req, res) {
+app.get("/api/flats", async function (req, res) {
 
     jwt.verify(ensureToken(req, res), 'my_sceret_key', async (err, loggedUser) => {
-            // console.log("loggedUser",loggedUser['login']['ApartmentName'])
-            if (err) {
-                res.sendStatus(403);
-            } else {
-                let flatList = await onApartmentIdByFlatsQuery(loggedUser['login']['ApartmentName'])
+        // console.log("loggedUser",loggedUser['login']['ApartmentId'])
+        if (err) {
+            res.sendStatus(403);
+        } else {
+            let flatList = await onApartmentIdByFlatsQuery(loggedUser['login']['ApartmentId'])
 
-                res.status(200).json({ primary: flatList, status: { code: 'SUCCESS', message: "Success" } });
-            }
-        });
+            res.status(200).json({ primary: flatList, status: { code: 'SUCCESS', message: "Success" } });
+        }
+    });
 });
 
 
 //post maintenance
 
-app.post("/api/maintenance",async function (req, res) {
+app.post("/api/maintenance", async function (req, res) {
 
     jwt.verify(ensureToken(req, res), 'my_sceret_key', async (err, loggedUser) => {
-            var body = req.body;
-            body['CreatedDate'] = new Date();
-            body['UpdatedDate'] = new Date();
-            body['Month'] = getFormattedDate(body['MaintenanceDate'],'MMMM');
-            body['Year'] = getFormattedDate(body['MaintenanceDate'],'YYYY')
-            if (err) {
-                res.sendStatus(403);
-            } else {
+        var body = req.body;
+        body['CreatedDate'] = new Date();
+        body['UpdatedDate'] = new Date();
+        body['Month'] = getFormattedDate(body['MaintenanceDate'], 'MMMM');
+        body['Year'] = getFormattedDate(body['MaintenanceDate'], 'YYYY')
+        if (err) {
+            res.sendStatus(403);
+        } else {
 
-                let maintenanceCheck = await onFlatNumberByMaintenanceDateQuery(body['FlatNumber'],body['Month'],body['Year']);
-                console.log("maintenanceCheck",maintenanceCheck)
-                if(maintenanceCheck === null) {
+            let maintenanceCheck = await onFlatNumberByMaintenanceDateQuery(body['FlatNumber'], body['Month'], body['Year']);
+            console.log("maintenanceCheck", maintenanceCheck)
+            if (maintenanceCheck === null) {
                 let maintenance = await onApartmentsByMaintenancePostQuery(body);
                 res.status(200).json({ primary: maintenance, status: { code: 'SUCCESS', message: "Your Maintenance Amount is Successfully Created" } });
-                } else {
+            } else {
                 res.status(200).json({ status: { code: 'ERROR', message: "Already You Paid Maintenance on this Date " + maintenanceCheck['MaintenanceDate'] } });
 
-                }
             }
-        });
+        }
+    });
 });
 // list maintenance
-app.get("/api/maintenance",async function (req, res) {
+app.get("/api/maintenance", async function (req, res) {
 
     jwt.verify(ensureToken(req, res), 'my_sceret_key', async (err, loggedUser) => {
-            // console.log("loggedUser",loggedUser['login']['ApartmentName'])
-            if (err) {
-                res.sendStatus(403);
-            } else {
-                let maintenanceList = await onApartmentsByMaintenanceQuery(loggedUser['login']['ApartmentName'])
+        // console.log("loggedUser",loggedUser['login']['ApartmentId'])
+        if (err) {
+            res.sendStatus(403);
+        } else {
+            let maintenanceList = await onApartmentsByMaintenanceQuery(loggedUser['login']['ApartmentId'])
 
-                res.status(200).json({ primary: maintenanceList, status: { code: 'SUCCESS', message: "Success" } });
-            }
-        });
+            res.status(200).json({ primary: maintenanceList, status: { code: 'SUCCESS', message: "Success" } });
+        }
+    });
 });
 
 // monthwise list
 
 
-app.get("/api/maintenance/:id",async function (req, res) {
+app.get("/api/maintenance/:id", async function (req, res) {
     // req.params.id
     jwt.verify(ensureToken(req, res), 'my_sceret_key', async (err, loggedUser) => {
-            // console.log("loggedUser",loggedUser['login']['ApartmentName'])
-            if (err) {
-                res.sendStatus(403);
-            } else {
-                let maintenanceListMonthWise = await onApartmentsByMonthWiseMaintenanceQuery(loggedUser['login']['ApartmentName'],req.params.id)
+        // console.log("loggedUser",loggedUser['login']['ApartmentId'])
+        if (err) {
+            res.sendStatus(403);
+        } else {
+            let maintenanceListMonthWise = await onApartmentsByMonthWiseMaintenanceQuery(loggedUser['login']['ApartmentId'], req.params.id)
 
-                res.status(200).json({ primary: maintenanceListMonthWise, status: { code: 'SUCCESS', message: "Success" } });
-            }
-        });
+            res.status(200).json({ primary: maintenanceListMonthWise, status: { code: 'SUCCESS', message: "Success" } });
+        }
+    });
 });
+
+
+
+app.get("/api/maintenancegroup/:year", async function (req, res) {
+    // req.params.id
+    jwt.verify(ensureToken(req, res), 'my_sceret_key', async (err, loggedUser) => {
+        // console.log("loggedUser",loggedUser['login']['ApartmentId'])
+        if (err) {
+            res.sendStatus(403);
+        } else {
+            let maintenanceList = await onApartmentsByMaintenanceGroupFlatQuery(loggedUser['login']['ApartmentId'], req.params.year)
+
+            res.status(200).json({ primary: maintenanceList, status: { code: 'SUCCESS', message: "Success" } });
+        }
+    });
+});
+
+
+// submit rolemapping
+app.post("/api/rolemapping", async function (req, res) {
+
+    jwt.verify(ensureToken(req, res), 'my_sceret_key', async (err, loggedUser) => {
+
+
+
+
+        var body = req.body;
+        var lastindex
+        var i 
+
+
+        if (err) {
+            res.sendStatsus(403);
+        } else {
+               if(body['RoleId'] === undefined) {
+                var lastindex = await onLoadRoleMappingQuery();
+                if (lastindex.length === 0) {
+                    i = '1';
+                } else {
+                    lastindexValue = parseInt(lastindex[lastindex.length - 1]['RoleId']);
+                    i = ++lastindexValue;
+                }
+        
+                body['CreatedDate'] = new Date();
+                body['UpdatedDate'] = new Date();
+                body['Password'] = md5( body['Password']);
+                body['RoleId'] = parseInt(i)
+
+                admin = await onApartmentsByRoleMappingPostQuery(body);
+                res.status(200).json({  status: { code: 'SUCCESS', message: "Role Mapping is Successfully Created" } });
+               } else {
+                body['UpdatedDate'] = new Date();
+                body['Password'] = md5( body['Password']);
+                admin = await onApartmentsByRoleMappingUpdateQuery(body['ApartmentId'],body['RoleId'],body);
+                res.status(200).json({  status: { code: 'SUCCESS', message: "Role Mapping is Successfully Updated" } });
+               }
+        }
+    });
+});
+
+
+
+
+
 
 
 // =============================REPO====================================
@@ -384,11 +452,20 @@ function onLoadSignupQuery() {
     });
 }
 
+function onLoadRoleMappingQuery() {
+    return new Promise((resolve, reject) => {
+        database.collection("role_mapping").find({}).toArray().then(res => {
+            resolve(res)
+        }, (error) => {
+            return reject(error);
+        });
+    });
+}
 
-function onFlatQuery(blockNumber,floorNumber,FlatNumber) {
+function onFlatQuery(blockNumber, floorNumber, FlatNumber) {
     // console.log("blockNumber=",blockNumber,"floorNumber=",floorNumber,"FlatNumber=",FlatNumber)
     return new Promise((resolve, reject) => {
-        database.collection(APARTMENTS_COLLECTION).findOne({"BlockNumber":blockNumber,"FloorNumber":floorNumber,"FlatNumber":FlatNumber}).then(res => {
+        database.collection(APARTMENTS_COLLECTION).findOne({ "BlockNumber": blockNumber, "FloorNumber": floorNumber, "FlatNumber": FlatNumber }).then(res => {
             resolve(res)
         }, (error) => {
             return reject(error);
@@ -409,7 +486,7 @@ function onApartmentsQuery() {
 
 function onApartmentsByApartmentIdQuery(apartmentId) {
     return new Promise((resolve, reject) => {
-        database.collection(APARTMENTS_COLLECTION).find({"ApartmentId":apartmentId}).toArray().then(res => {
+        database.collection(APARTMENTS_COLLECTION).find({ "ApartmentId": apartmentId }).toArray().then(res => {
             resolve(res)
         }, (error) => {
             return reject(error);
@@ -419,9 +496,9 @@ function onApartmentsByApartmentIdQuery(apartmentId) {
 
 
 
-function onApartmentsByFlatIdStatusQuery(FlatId,status) {
+function onApartmentsByFlatIdStatusQuery(FlatId, status) {
     return new Promise((resolve, reject) => {
-        database.collection(APARTMENTS_COLLECTION).updateOne({"FlatId" : FlatId }, { $set: { "Active" : status} }).then(res => {
+        database.collection(APARTMENTS_COLLECTION).updateOne({ "FlatId": FlatId }, { $set: { "Active": status } }).then(res => {
             resolve(res)
         }, (error) => {
             return reject(error);
@@ -432,7 +509,7 @@ function onApartmentsByFlatIdStatusQuery(FlatId,status) {
 function onApartmentIdByFlatsQuery(apartmentId) {
     return new Promise((resolve, reject) => {
         // in mongodb query db.getCollection('apartments_master').find({ApartmentId:"APSGMVDS2"}, { FlatNumber: 1, FlatId: 1 })
-        database.collection(APARTMENTS_COLLECTION).find({"ApartmentId":apartmentId,"Active":"1"},{ projection: { FlatNumber: 1, FlatId: 1 } }).toArray().then(res => {
+        database.collection(APARTMENTS_COLLECTION).find({ "ApartmentId": apartmentId, "Active": "1" }, { projection: { FlatNumber: 1, FlatId: 1 } }).toArray().then(res => {
             resolve(res)
         }, (error) => {
             return reject(error);
@@ -441,7 +518,7 @@ function onApartmentIdByFlatsQuery(apartmentId) {
 }
 
 function onApartmentsByMaintenancePostQuery(body) {
-    return new Promise((resolve,reject)=>{
+    return new Promise((resolve, reject) => {
         database.collection("maintenance_master").insertOne(body).then(res => {
             resolve(res)
         }, (error) => {
@@ -450,10 +527,30 @@ function onApartmentsByMaintenancePostQuery(body) {
     })
 }
 
-function onFlatNumberByMaintenanceDateQuery(FlatNumber,Month,Year) {
+function onApartmentsByRoleMappingPostQuery(body) {
+    return new Promise((resolve, reject) => {
+        database.collection("role_mapping").insertOne(body).then(res => {
+            resolve(res)
+        }, (error) => {
+            return reject(error);
+        });
+    })
+}
+
+function onApartmentsByRoleMappingUpdateQuery(ApartmentId, RoleId,body) {
+    return new Promise((resolve, reject) => {
+        database.collection("role_mapping").updateOne({ "ApartmentId": ApartmentId,"RoleId": RoleId }, { $set: body }).then(res => {
+            resolve(res)
+        }, (error) => {
+            return reject(error);
+        });
+    });
+}
+
+function onFlatNumberByMaintenanceDateQuery(FlatNumber, Month, Year) {
     // console.log("FlatNumber=",FlatNumber,"Month", Month, "Year","Year")
     return new Promise((resolve, reject) => {
-        database.collection("maintenance_master").findOne({"Month":Month,"FlatNumber":FlatNumber,"Year":Year}).then(res => {
+        database.collection("maintenance_master").findOne({ "Month": Month, "FlatNumber": FlatNumber, "Year": Year }).then(res => {
             resolve(res)
         }, (error) => {
             return reject(error);
@@ -463,8 +560,8 @@ function onFlatNumberByMaintenanceDateQuery(FlatNumber,Month,Year) {
 
 
 function onApartmentsByMaintenanceQuery(apartmentId) {
-    return new Promise((resolve, reject) => { 
-        database.collection("maintenance_master").find({"ApartmentId":apartmentId}).sort({ "FlatNumber": 1}).toArray().then(res => {
+    return new Promise((resolve, reject) => {
+        database.collection("maintenance_master").find({ "ApartmentId": apartmentId }).sort({ "FlatNumber": 1 }).toArray().then(res => {
             resolve(res)
         }, (error) => {
             return reject(error);
@@ -472,21 +569,61 @@ function onApartmentsByMaintenanceQuery(apartmentId) {
     });
 }
 
-function onApartmentsByMonthWiseMaintenanceQuery(apartmentId,month) {
-    return new Promise((resolve, reject) => { 
-        database.collection("maintenance_master").find({"ApartmentId":apartmentId,"Month":month}).sort({ "FlatNumber": 1}).toArray().then(res => {
+function onApartmentsByMaintenanceGroupFlatQuery(apartmentId, year) {
+    console.log("apartmentId", apartmentId)
+    return new Promise((resolve, reject) => {
+        database.collection("maintenance_master").aggregate([
+            {
+                $match: {
+                    "ApartmentId": apartmentId,
+                    "Year": year
+                }
+            },
+            {
+                $group: {
+                    _id: { "FlatNumber": "$FlatNumber", "Year": "$Year" },
+                    "TotalAmount": { "$sum": "$MaintenanceAmount" },
+                    "LINES": {
+                        $addToSet: {
+                            "MaintenanceDate": "$MaintenanceDate", "MaintenanceAmount": "$MaintenanceAmount", "Month": "$Month",
+                            "FlatNumber": "$FlatNumber"
+                        }
+                    }
+                }
+            },
+            { $sort: { "_id.FlatNumber": 1 } },
+            {
+                $project: {
+                    "FlatNumbers": "$LINES",
+                    "TotalAmounts": "$TotalAmount"
+                }
+            }
+        ]).toArray().then(res => {
             resolve(res)
         }, (error) => {
             return reject(error);
         });
     });
 }
+
+function onApartmentsByMonthWiseMaintenanceQuery(apartmentId, month) {
+    return new Promise((resolve, reject) => {
+        database.collection("maintenance_master").find({ "ApartmentId": apartmentId, "Month": month }).sort({ "FlatNumber": 1 }).toArray().then(res => {
+            resolve(res)
+        }, (error) => {
+            return reject(error);
+        });
+    });
+}
+
+
+
 
 
 // date formate 
 
 
- function getFormattedDate(date, format)  {
+function getFormattedDate(date, format) {
     return moment(date).format(format);
 }
 
@@ -498,6 +635,36 @@ function getDefaultLongFormattedDate(date) {
     return this.getFormattedDate(date, 'YYYY-MM-DD HH:mm:ss');
 }
 
- function getLocalDateFromDefaultFormat(dateStr) {
+function getLocalDateFromDefaultFormat(dateStr) {
     return this.getLocalDateFromString(dateStr, 'YYYY-MM-DD');
+}
+
+
+///=========================Mail================
+
+function sendGMail(data) {
+    // dont delete this comment 'https://myaccount.google.com/lesssecureapps' if you get error go beside link active the button
+    console.log("DATA",data)
+var transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: 'sanjay.gajjala1995@gmail.com',
+      pass: 'Gmvds@1234'
+    }
+  });
+  
+  var mailOptions = {
+    from: 'sanjay.gajjala1995@gmail.com',
+    to: 'dinesh.gajjala@gmail.com,gudipatinikhil@gmail.com',
+    subject: 'Congragulations',
+    text: 'You are  successfully singup with' + data.ApartmentName
+  };
+  
+  transporter.sendMail(mailOptions, function(error, info){
+    if (error) {
+      console.log(error);
+    } else {
+      console.log('Email sent: ' + info.response);
+    }
+  });
 }
